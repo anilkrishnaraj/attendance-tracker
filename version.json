@@ -1,4 +1,4 @@
 {
-  "latestVersion": "beta003",
+  "latestVersion": "beta002",
   "releaseNotes": "Fixed mobile styling overflow and added native XLSX exports."
 }
