@@ -362,6 +362,45 @@
 </div>
 
 <script>
+
+// ==========================================
+// PEPPERO REMOTE VERSION CONTROL SERVICE
+// ==========================================
+const CURRENT_VERSION = "beta002";
+
+// Replace this with the link where your latest index.html or version manifest is hosted
+const UPDATE_MANIFEST_URL = "https://anilkrishnaraj.github.io/attendance-tracker/version.json"; 
+
+function checkForApplicationUpdates() {
+    // Add a random timestamp to prevent the browser from caching the version check file
+    const url = UPDATE_MANIFEST_URL + "?nocache=" + new Date().getTime();
+
+    fetch(url)
+    .then(res => res.json())
+    .then(manifest => {
+        if (manifest.latestVersion !== CURRENT_VERSION) {
+            // Trigger a modal popup or direct reload notice
+            const processUpdate = confirm(
+                `A critical system upgrade (${manifest.latestVersion}) is available for Peppero Attendance Portal.\n\n` +
+                `Release Notes: ${manifest.releaseNotes}\n\n` +
+                `Click 'OK' to instantly sync and upgrade.`
+            );
+            
+            if (processUpdate) {
+                // Clear browser internal assets cache and force-reload fresh code from servers
+                window.location.reload(true);
+            }
+        }
+    })
+    .catch(err => console.log("Update check skipped: Device offline or manifest unreached.", err));
+}
+
+// Check on boot startup sequence
+setTimeout(checkForApplicationUpdates, 3000);
+
+// Check silently every 30 minutes while the window tab remains open
+setInterval(checkForApplicationUpdates, 1000 * 60 * 30);
+
     const SERVICE_URL = "https://script.google.com/macros/s/AKfycbzDEFhMWITYuQgW8y_-VP5p7IdgSsn3cfnW7y9tZgVQ6KlHsiZlNb2AYmHvxfYZTPnjdQ/exec";
     const PORTAL_SECRET = "Admin123";
     
