@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peppero Attendance Portal</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary: #4f46e5; --primary-hover: #4338ca;
+            --bg-canvas: #f8fafc; --bg-card: #ffffff;
+            --text-main: #0f172a; --text-muted: #64748b;
+            --border: #e2e8f0;
+            --excel-green: #107c41; --excel-green-hover: #0b592e;
+            --danger: #dc2626; --danger-hover: #b91c1c;
+            --warning-bg: #fff7ed; --warning-border: #ffedd5; --warning-text: #c2410c;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-canvas); color: var(--text-main);
+            margin: 0; padding: 12px; display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: var(--bg-card); padding: 20px; border-radius: 12px;
+            box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05); width: 100%; max-width: 1000px; box-sizing: border-box;
+            position: relative; display: flex; flex-direction: column;
+        }
+        
+        #loginScreen {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: var(--bg-canvas); display: flex; justify-content: center;
+            align-items: center; z-index: 9999; padding: 20px; box-sizing: border-box;
+        }
+        .login-card {
+            background: var(--bg-card); padding: 30px; border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.06); width: 100%; max-width: 360px;
+            text-align: center; box-sizing: border-box;
+        }
+
+        .header-title { text-align: center; margin-top: 0; margin-bottom: 24px; color: #1e293b; font-size: 1.5rem; }
+        
+        /* Data Completeness Home Banner Alert Box Styling */
+        .alert-banner {
+            background-color: var(--warning-bg); border: 1px solid var(--warning-border);
+            color: var(--warning-text); padding: 12px 16px; border-radius: 8px;
+            margin-bottom: 20px; font-size: 13px; font-weight: 500; display: none;
+            flex-direction: column; gap: 4px; line-height: 1.4;
+        }
+
+        .top-navbar {
+            display: flex; flex-direction: column; gap: 12px;
+            margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px;
+        }
+        .tabs { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+        .tab {
+            flex: 1; text-align: center; padding: 10px 8px; border-radius: 6px; cursor: pointer; font-weight: 500;
+            color: var(--text-muted); transition: all 0.2s; font-size: 13px; white-space: nowrap;
+        }
+        .tab.active { background-color: #e0e7ff; color: var(--primary); }
+        .nav-actions { display: flex; gap: 8px; width: 100%; }
+        .nav-actions button { flex: 1; padding: 10px; font-size: 13px; }
+        
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .form-row { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 14px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        label { font-size: 13px; font-weight: 600; color: #334155; }
+        input, select, textarea {
+            padding: 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; outline: none; font-family: inherit; width: 100%; box-sizing: border-box;
+        }
+        input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+        
+        button {
+            padding: 12px 16px; background-color: var(--primary); color: white; border: none;
+            border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s;
+        }
+        button:hover { background-color: var(--primary-hover); }
+        button:disabled { background-color: #cbd5e1; cursor: not-allowed; }
+        .btn-secondary { background-color: #64748b; }
+        .btn-secondary:hover { background-color: #475569; }
+        .btn-danger { background-color: var(--danger); }
+        .btn-danger:hover { background-color: var(--danger-hover); }
+        .btn-excel { background-color: var(--excel-green); width: 100%; }
+        .btn-excel:hover { background-color: var(--excel-green-hover); }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px; }
+        .stat-card { background: #f1f5f9; padding: 12px; border-radius: 8px; text-align: center; }
+        .stat-val { font-size: 20px; font-weight: 700; color: var(--primary); }
+        .stat-lbl { font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-top: 2px; }
+
+        .filter-bar { background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 16px; }
+        .report-header-row { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; margin-bottom: 10px; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background-color: #f8fafc; color: #475569; font-weight: 600; }
+        
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; display: inline-block; }
+        .bg-pres { background: #dcfce7; color: #15803d; }
+        .bg-site { background: #e0f2fe; color: #0369a1; }
+        .bg-lop { background: #fee2e2; color: #b91c1c; }
+        .bg-holiday { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+        .bg-mix { background: #fef9c3; color: #854d0e; }
+        
+        .desc-text { display: block; font-size: 11px; color: var(--text-muted); font-style: italic; margin-top: 2px;}
+        .half-day-section { display: none; background: #fafafa; border: 1px dashed #cbd5e1; padding: 12px; border-radius: 8px; margin-bottom: 14px; }
+
+        .accordion-trigger {
+            background: #f1f5f9; color: var(--text-main); font-size: 11px; font-weight: 600;
+            padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border); width: auto; display: inline-flex;
+            align-items: center; gap: 4px; cursor: pointer; margin-top: 6px;
+        }
+        .accordion-trigger:hover { background: #e2e8f0; }
+        .accordion-content { display: none; margin-top: 8px; padding: 8px; border-left: 2px solid var(--primary); background: #fafafa; border-radius: 0 4px 4px 0; }
+        .accordion-content.open { display: block; }
+
+        .log-item-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; padding: 6px; border-radius: 4px; border-bottom: 1px solid #f1f5f9; }
+        .log-item-row:hover { background: #e2e8f0; }
+        .log-item-actions { display: flex; gap: 4px; }
+        .btn-inline-edit { color: var(--primary); background: transparent; padding: 2px 6px; font-size: 11px; border: 1px solid #c7d2fe; border-radius: 4px; width: auto; font-weight: 500; }
+        .btn-inline-edit:hover { background: #e0e7ff; }
+        .btn-inline-delete { color: var(--danger); background: transparent; padding: 2px 6px; font-size: 11px; border: 1px solid #fca5a5; border-radius: 4px; width: auto; font-weight: 500; }
+        .btn-inline-delete:hover { background: #fef2f2; }
+
+        .toast-msg { text-align: center; margin-top: 12px; font-weight: 500; padding: 8px; border-radius: 6px; font-size: 13px; }
+        .text-success { color: #16a34a; background: #f0fdf4; }
+        .text-error { color: #dc2626; background: #fef2f2; }
+        .action-link { color: var(--primary); cursor: pointer; text-decoration: underline; font-weight: 600; }
+
+        .portal-footer {
+            margin-top: 32px; border-top: 1px solid var(--border); padding-top: 16px;
+            text-align: center; font-size: 12px; color: var(--text-muted);
+            display: flex; flex-direction: column; gap: 4px; line-height: 1.5;
+        }
+        .portal-footer a { color: var(--primary); text-decoration: none; font-weight: 600; }
+        .portal-footer a:hover { text-decoration: underline; }
+
+        @media(min-width: 600px) {
+            body { padding: 24px; }
+            .container { padding: 32px; }
+            .header-title { font-size: 2rem; }
+            .top-navbar { flex-direction: row; justify-content: space-between; }
+            .tabs { width: auto; }
+            .tab { padding: 8px 16px; font-size: 14px; }
+            .nav-actions { width: auto; }
+            .nav-actions button { font-size: 14px; }
+            .form-row { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+            .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 16px; }
+            .stat-card { padding: 16px; }
+            .stat-val { font-size: 24px; }
+            .stat-lbl { font-size: 12px; }
+            .report-header-row { flex-direction: row; justify-content: space-between; align-items: center; }
+            .btn-excel { width: auto; }
+            table { font-size: 14px; }
+            th, td { padding: 12px; }
+        }
+
+        @media(max-width: 600px) {
+            #attendanceReportingTable, #attendanceReportingTable thead, #attendanceReportingTable tbody, #attendanceReportingTable th, #attendanceReportingTable td, #attendanceReportingTable tr { 
+                display: block; 
+            }
+            #attendanceReportingTable thead { display: none; }
+            #attendanceReportingTable tr { margin-bottom: 16px; border: 1px solid var(--border); border-radius: 8px; padding: 12px; background: #fff; }
+            #attendanceReportingTable td { border: none; padding: 6px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #f1f5f9; }
+            #attendanceReportingTable td:last-child { border-bottom: none; }
+            #attendanceReportingTable td::before { content: attr(data-label); font-weight: 700; color: var(--text-muted); font-size: 12px; text-transform: uppercase; }
+            #attendanceReportingTable td div, #attendanceReportingTable td span { text-align: right; }
+            .accordion-content { text-align: left; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="loginScreen">
+    <div class="login-card">
+        <h2 style="margin-top:0; color:#1e293b;">Peppero Authentication</h2>
+        <p style="color:var(--text-muted); font-size:14px; margin-bottom:20px;">Please login to manage employee leave tracking parameters.</p>
+        <form id="loginForm">
+            <div class="form-group" style="margin-bottom: 16px; text-align: left;">
+                <label>System Password</label>
+                <input type="password" id="sysPassword" placeholder="••••••••" required autocomplete="current-password">
+            </div>
+            <button type="submit" style="width: 100%;">Unlock Application</button>
+        </form>
+        <div id="loginError" style="margin-top:12px; font-size:14px; color:#dc2626; font-weight:500;"></div>
+    </div>
+</div>
+
+<div class="container">
+    <h2 class="header-title">Peppero Attendance System</h2>
+    
+    <!-- Dynamic Alert Banner Component Block -->
+    <div id="missingDataAlert" class="alert-banner"></div>
+
+    <div class="top-navbar">
+        <div class="tabs">
+            <div class="tab active" data-panel="attendance-panel">Attendance Logger</div>
+            <div class="tab" data-panel="employee-panel">Manage Employees</div>
+            <div class="tab" data-panel="report-panel">Analytics & Reports</div>
+        </div>
+        <div class="nav-actions">
+            <button type="button" class="btn-secondary" id="btnGlobalRefresh" onclick="initSyncLoad()">🔄 Refresh</button>
+            <button type="button" class="btn-danger" onclick="logOutSession()">Logout</button>
+        </div>
+    </div>
+
+    <!-- PANEL 1: LOG ATTENDANCE -->
+    <div id="attendance-panel" class="panel active">
+        <form id="attendanceForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="attDate" onchange="checkForExistingLog()" required>
+                </div>
+                <div class="form-group">
+                    <label>Select Employee</label>
+                    <select id="attEmployee" onchange="checkForExistingLog()" required>
+                        <option value="" disabled selected>Loading Active Roster...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Duty Status Slot</label>
+                    <select id="attStatus" onchange="handleStatusChange()" required>
+                        <option value="" disabled selected>Select status</option>
+                        <option value="Present (Full Day)">Present (Full Day)</option>
+                        <option value="Holiday">Holiday</option>
+                        <option value="Leave Without Pay (LOP)">Leave Without Pay (LOP)</option>
+                        <option value="Site work">Site work</option>
+                        <option value="Half day">Half day</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="halfDaySection" class="half-day-section">
+                <div class="form-row" style="margin-bottom: 0;">
+                    <div class="form-group">
+                        <label>☀️ Morning Half Status</label>
+                        <select id="statusMorning">
+                            <option value="Present (Half Day)">Present (Half Day)</option>
+                            <option value="Leave Without Pay (Half Day)">Leave Without Pay (Half Day)</option>
+                            <option value="Site work (Half Day)">Site work (Half Day)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>🌙 Afternoon Half Status</label>
+                        <select id="statusAfternoon">
+                            <option value="Present (Half Day)">Present (Half Day)</option>
+                            <option value="Leave Without Pay (Half Day)">Leave Without Pay (Half Day)</option>
+                            <option value="Site work (Half Day)">Site work (Half Day)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group" id="descContainer" style="margin-bottom:16px;">
+                <label>Status Description / Notes</label>
+                <textarea id="attDesc" rows="2" placeholder="Provide site details or reason logs..."></textarea>
+            </div>
+
+            <button type="submit" id="btnSubmitAtt">Commit Entry Logs</button>
+        </form>
+        <div id="attToast" class="toast-msg"></div>
+    </div>
+
+    <!-- PANEL 2: MANAGE EMPLOYEES & SYSTEM BASELINE CONFIGURATIONS -->
+    <div id="employee-panel" class="panel">
+        <div class="filter-bar" style="background:#fff7ed; border-color:#ffedd5; margin-bottom:24px;">
+            <div class="form-group">
+                <label style="color:#c2410c;">📅 Attendance Tracking System Baseline Start Date</label>
+                <p style="margin:2px 0 8px 0; font-size:12px; color:var(--text-muted);">Warnings for missing logs will only check dates starting from this target baseline point forward.</p>
+                <input type="date" id="systemBaselineDate" onchange="saveBaselineDate()" style="max-width:250px;">
+            </div>
+        </div>
+
+        <h3 id="formModeTitle">Add New Member</h3>
+        <form id="employeeForm">
+            <input type="hidden" id="isNewEmployee" value="true">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Employee ID</label>
+                    <input type="text" id="empId" placeholder="e.g. EMP101" required>
+                </div>
+                <div class="form-group">
+                    <label>Full Employee Name</label>
+                    <input type="text" id="empName" placeholder="Jane Doe" required>
+                </div>
+                <div class="form-group">
+                    <label>Operational Department</label>
+                    <input type="text" id="empDept" placeholder="Engineering" required>
+                </div>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button type="submit" id="btnSubmitEmp">Register Employee</button>
+                <button type="button" class="btn-secondary" id="btnCancelEdit" style="display:none;" onclick="resetEmpForm()">Cancel Edit</button>
+            </div>
+        </form>
+        <div id="empToast" class="toast-msg"></div>
+
+        <h3>Active Roster Records</h3>
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr><th>ID</th><th>Name</th><th>Department</th><th>Operations</th></tr>
+                </thead>
+                <tbody id="rosterTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- PANEL 3: METRICS & REPORTING -->
+    <div id="report-panel" class="panel">
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-val" id="statTotalStaff">0</div><div class="stat-lbl">Staff Count</div></div>
+            <div class="stat-card"><div class="stat-val" id="statFullPresent">0</div><div class="stat-lbl">Office Days</div></div>
+            <div class="stat-card"><div class="stat-val" id="statTotalSite">0</div><div class="stat-lbl" style="color:#0369a1;">Site Days</div></div>
+            <div class="stat-card"><div class="stat-val" id="statTotalLops">0</div><div class="stat-lbl">LOP Days</div></div>
+        </div>
+
+        <div class="filter-bar">
+            <div class="form-row" style="margin-bottom: 0;">
+                <div class="form-group">
+                    <label>Search Name/Dept/ID/Notes</label>
+                    <input type="text" id="searchFilter" placeholder="Type to filter..." oninput="buildReportingViews()">
+                </div>
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" id="filterStart" onchange="buildReportingViews()">
+                </div>
+                <div class="form-group">
+                    <label>End Date</label>
+                    <input type="date" id="filterEnd" onchange="buildReportingViews()">
+                </div>
+            </div>
+        </div>
+
+        <div class="report-header-row">
+            <h3 style="margin: 0;">Performance Summary Matrix</h3>
+            <button type="button" class="btn-excel" onclick="downloadExcelReport()">📥 Export Filtered XLSX Report</button>
+        </div>
+
+        <table id="attendanceReportingTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Resource Name</th>
+                    <th>Dept</th>
+                    <th>Present (Office)</th>
+                    <th>Site Work</th>
+                    <th>Holiday</th>
+                    <th>LOP Days</th>
+                </tr>
+            </thead>
+            <tbody id="analyticsTableBody"></tbody>
+        </table>
+    </div>
+
+    <div class="portal-footer">
+        <div>Made with ❤️ from <a href="https://www.peppero.in" target="_blank">Peppero</a></div>
+        <div>All Copyrights Reserved &copy; 2026 | Version <span style="font-family:monospace; font-weight:600;">beta002</span></div>
+    </div>
+</div>
+
+<script>
+    const SERVICE_URL = "https://script.google.com/macros/s/AKfycbzDEFhMWITYuQgW8y_-VP5p7IdgSsn3cfnW7y9tZgVQ6KlHsiZlNb2AYmHvxfYZTPnjdQ/exec";
+    const PORTAL_SECRET = "Admin123";
+    
+    let cacheStore = { employees: [], logs: [] };
+    let currentActivePanel = "attendance-panel";
+
+    function setDefaultMonthFilters() {
+        const today = new Date();
+        const y = today.getFullYear();
+        const m = today.getMonth();
+        
+        const firstDay = new Date(y, m, 1);
+        const lastDay = new Date(y, m + 1, 0);
+
+        const offsetFormat = (date) => {
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+        };
+
+        document.getElementById('filterStart').value = offsetFormat(firstDay);
+        document.getElementById('filterEnd').value = offsetFormat(lastDay);
+        document.getElementById('attDate').valueAsDate = today;
+
+        // Load Baseline Date parameter configuration from LocalStorage if set
+        const storedBaseline = localStorage.getItem("peppero_baseline_start_date");
+        if(storedBaseline) {
+            document.getElementById('systemBaselineDate').value = storedBaseline;
+        }
+    }
+
+    function saveBaselineDate() {
+        const dateVal = document.getElementById('systemBaselineDate').value;
+        if(dateVal) {
+            localStorage.setItem("peppero_baseline_start_date", dateVal);
+            evaluateAttendanceCompleteness(); // Trigger evaluation calculation updates instantly
+        }
+    }
+
+    /* DATA-ENTRY VALIDATION ALERT ENGINE */
+    function evaluateAttendanceCompleteness() {
+        const alertBanner = document.getElementById('missingDataAlert');
+        const baselineStr = localStorage.getItem("peppero_baseline_start_date");
+        
+        if(!baselineStr || cacheStore.employees.length === 0) {
+            alertBanner.style.display = "none";
+            return;
+        }
+
+        const baselineDate = new Date(baselineStr);
+        baselineDate.setHours(0,0,0,0);
+
+        const formatLocalString = (date) => {
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+        };
+
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setHours(0,0,0,0);
+
+        let alerts = [];
+
+        // Evaluate Yesterday's logs if it falls after the user-defined baseline
+        if (yesterday >= baselineDate) {
+            const yesterdayStr = formatLocalString(yesterday);
+            const loggedCount = cacheStore.logs.filter(l => l.date === yesterdayStr).length;
+            if (loggedCount === 0) {
+                alerts.push(`⚠️ <strong>Missing Data:</strong> No records have been logged for yesterday (<strong>${yesterdayStr}</strong>).`);
+            }
+        }
+
+        // Evaluate Today's logs if it falls after the user-defined baseline
+        if (today >= baselineDate) {
+            const todayStr = formatLocalString(today);
+            const loggedCount = cacheStore.logs.filter(l => l.date === todayStr).length;
+            if (loggedCount === 0) {
+                alerts.push(`⚠️ <strong>Missing Data:</strong> No records have been logged for today (<strong>${todayStr}</strong>).`);
+            }
+        }
+
+        if (alerts.length > 0) {
+            alertBanner.innerHTML = alerts.map(a => `<div>${a}</div>`).join("");
+            alertBanner.style.display = "flex";
+        } else {
+            alertBanner.style.display = "none";
+        }
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const pwd = document.getElementById('sysPassword').value;
+        const errDiv = document.getElementById('loginError');
+        
+        if(pwd === PORTAL_SECRET) {
+            localStorage.setItem("attendance_session_auth", "true");
+            document.getElementById('loginScreen').style.display = "none";
+            initSyncLoad();
+        } else {
+            errDiv.innerText = "Invalid access key. Authentication denied.";
+            document.getElementById('sysPassword').value = "";
+        }
+    });
+
+    function checkActiveAuthSession() {
+        setDefaultMonthFilters();
+        if(localStorage.getItem("attendance_session_auth") === "true") {
+            document.getElementById('loginScreen').style.display = "none";
+            initSyncLoad();
+        }
+    }
+
+    function logOutSession() {
+        localStorage.removeItem("attendance_session_auth");
+        document.getElementById('sysPassword').value = "";
+        document.getElementById('loginError').innerText = "";
+        document.getElementById('loginScreen').style.display = "flex";
+    }
+
+    document.querySelectorAll('.tab').forEach(t => {
+        t.addEventListener('click', function() {
+            routeTo(this.dataset.panel, this);
+        });
+    });
+
+    function routeTo(panelId, tabComponent) {
+        currentActivePanel = panelId;
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(panelId).classList.add('active');
+        if(tabComponent) tabComponent.classList.add('active');
+        else document.querySelector(`.tab[data-panel="${panelId}"]`).classList.add('active');
+        if(panelId === 'report-panel') buildReportingViews();
+    }
+
+    function initSyncLoad() {
+        const refreshBtn = document.getElementById('btnGlobalRefresh');
+        refreshBtn.disabled = true;
+        refreshBtn.innerText = "⏳ Syncing...";
+
+        const cacheBusterUrl = SERVICE_URL + "?_=" + new Date().getTime();
+        fetch(cacheBusterUrl)
+        .then(res => res.json())
+        .then(data => {
+            cacheStore = data;
+            renderAttendanceOptions();
+            renderRosterList();
+            evaluateAttendanceCompleteness(); // Trigger evaluation calculation check routines
+            if(currentActivePanel === 'report-panel') buildReportingViews();
+            checkForExistingLog();
+        })
+        .catch(err => console.error("Sync error:", err))
+        .finally(() => {
+            refreshBtn.disabled = false;
+            refreshBtn.innerText = "🔄 Refresh";
+        });
+    }
+
+    function renderAttendanceOptions() {
+        const select = document.getElementById('attEmployee');
+        select.innerHTML = cacheStore.employees.length 
+            ? '<option value="" disabled selected>Choose an individual...</option>' 
+            : '<option disabled>No employees registered yet.</option>';
+            
+        cacheStore.employees.forEach(emp => {
+            let opt = document.createElement('option');
+            opt.value = emp.id;
+            opt.textContent = `${emp.name} (${emp.id})`;
+            select.appendChild(opt);
+        });
+    }
+
+    function handleStatusChange() {
+        const primaryStatus = document.getElementById('attStatus').value;
+        const halfDaySection = document.getElementById('halfDaySection');
+        const textarea = document.getElementById('attDesc');
+
+        if (primaryStatus === "Half day") {
+            halfDaySection.style.display = "block";
+        } else {
+            halfDaySection.style.display = "none";
+        }
+
+        if (primaryStatus === "Site work") {
+            textarea.placeholder = "REQUIRED: Enter Site Location / Task details...";
+            textarea.required = true;
+        } else {
+            textarea.placeholder = "Optional: Add configuration remarks or reason logs...";
+            textarea.required = false;
+        }
+    }
+
+    function checkForExistingLog() {
+        const dateVal = document.getElementById('attDate').value;
+        const empIdVal = document.getElementById('attEmployee').value;
+        const toast = document.getElementById('attToast');
+        
+        if (!dateVal || !empIdVal) return;
+
+        const record = cacheStore.logs.find(l => l.date === dateVal && l.empId === empIdVal);
+        const submitBtn = document.getElementById('btnSubmitAtt');
+
+        if (record) {
+            const isCustomHalfDay = record.status.startsWith("AM:") || record.status.includes(" / PM:");
+            
+            if (isCustomHalfDay) {
+                document.getElementById('attStatus').value = "Half day";
+                const parts = record.status.split(" / ");
+                if(parts[0]) document.getElementById('statusMorning').value = parts[0].replace("AM: ", "") + " (Half Day)";
+                if(parts[1]) document.getElementById('statusAfternoon').value = parts[1].replace("PM: ", "") + " (Half Day)";
+            } else {
+                document.getElementById('attStatus').value = record.status;
+            }
+            
+            document.getElementById('attDesc').value = record.description;
+            handleStatusChange();
+            toast.className = "toast-msg text-success";
+            toast.innerText = "Existing record found for this day. Submitting will overwrite it.";
+            submitBtn.innerText = "Update Existing Entry";
+        } else {
+            document.getElementById('attStatus').value = "";
+            document.getElementById('attDesc').value = "";
+            handleStatusChange();
+            toast.className = "toast-msg";
+            toast.innerText = "";
+            submitBtn.innerText = "Commit Entry Logs";
+        }
+    }
+
+    function renderRosterList() {
+        const tbody = document.getElementById('rosterTableBody');
+        tbody.innerHTML = "";
+        cacheStore.employees.forEach(emp => {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><code>${emp.id}</code></td>
+                <td><strong>${emp.name}</strong></td>
+                <td>${emp.department}</td>
+                <td><span class="action-link" onclick="triggerEditMode('${emp.id}', '${escape(emp.name)}', '${escape(emp.department)}')">Modify</span></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function triggerEditMode(id, name, dept) {
+        document.getElementById('empId').value = id;
+        document.getElementById('empId').disabled = true; 
+        document.getElementById('empName').value = unescape(name);
+        document.getElementById('empDept').value = unescape(dept);
+        document.getElementById('isNewEmployee').value = "false";
+        document.getElementById('formModeTitle').innerText = "Modify Employee Profile";
+        document.getElementById('btnSubmitEmp').innerText = "Save Changes";
+        document.getElementById('btnCancelEdit').style.display = "block";
+        routeTo('employee-panel');
+    }
+
+    function resetEmpForm() {
+        document.getElementById('empId').value = "";
+        document.getElementById('empId').disabled = false;
+        document.getElementById('employeeForm').reset();
+        document.getElementById('isNewEmployee').value = "true";
+        document.getElementById('formModeTitle').innerText = "Add New Member";
+        document.getElementById('btnSubmitEmp').innerText = "Register Employee";
+        document.getElementById('btnCancelEdit').style.display = "none";
+    }
+
+    document.getElementById('attendanceForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        let finalStatus = document.getElementById('attStatus').value;
+        if (finalStatus === "Half day") {
+            const am = document.getElementById('statusMorning').value.replace(" (Half Day)", "");
+            const pm = document.getElementById('statusAfternoon').value.replace(" (Half Day)", "");
+            finalStatus = `AM: ${am} / PM: ${pm}`;
+        }
+
+        executeTask('btnSubmitAtt', 'attToast', {
+            action: "logAttendance",
+            date: document.getElementById('attDate').value,
+            empId: document.getElementById('attEmployee').value,
+            status: finalStatus,
+            description: document.getElementById('attDesc').value.trim()
+        }, () => { 
+            document.getElementById('attStatus').value = ""; 
+            document.getElementById('attDesc').value = "";
+            handleStatusChange();
+            document.getElementById('attToast').innerText = "";
+        });
+    });
+
+    document.getElementById('employeeForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        executeTask('btnSubmitEmp', 'empToast', {
+            action: "upsertEmployee",
+            id: document.getElementById('empId').value.trim(),
+            name: document.getElementById('empName').value.trim(),
+            department: document.getElementById('empDept').value.trim(),
+            isNew: document.getElementById('isNewEmployee').value === "true"
+        }, () => { resetEmpForm(); });
+    });
+
+    // INLINE DESCRIPTION NOTE UPDATER TRANSACTION ENGINE
+    function inlineEditLogDescription(date, empId, currentDesc) {
+        const newDesc = prompt(`Modify note details for Entry: [${date} | ID: ${empId}]:`, currentDesc);
+        if(newDesc === null) return; // Action aborted if user cancelled prompt
+
+        const record = cacheStore.logs.find(l => l.date === date && l.empId === empId);
+        if(!record) return;
+
+        const refreshBtn = document.getElementById('btnGlobalRefresh');
+        refreshBtn.disabled = true;
+
+        fetch(SERVICE_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+                action: "logAttendance", // Reuses logAttendance function inside apps script to safely handle row overrides
+                date: date,
+                empId: empId,
+                status: record.status,
+                description: newDesc.trim()
+            })
+        })
+        .then(res => res.json())
+        .then(resData => {
+            if (resData.result === "success") {
+                initSyncLoad();
+            } else {
+                alert("Modification failed: " + resData.error);
+            }
+        })
+        .catch(() => alert("Network communication error updating description logs."))
+        .finally(() => refreshBtn.disabled = false);
+    }
+
+    function deleteAttendanceLog(date, empId) {
+        if (!confirm(`Are you sure you want to erase the log for ID ${empId} on ${date}?`)) return;
+        const refreshBtn = document.getElementById('btnGlobalRefresh');
+        refreshBtn.disabled = true;
+        
+        fetch(SERVICE_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: "deleteAttendance", date: date, empId: empId })
+        })
+        .then(res => res.json())
+        .then(resData => {
+            if (resData.result === "success") {
+                initSyncLoad();
+            } else {
+                alert("Error: " + resData.error);
+            }
+        })
+        .catch(() => alert("Network transmission failure during removal."))
+        .finally(() => refreshBtn.disabled = false);
+    }
+
+    function executeTask(btnId, toastId, payload, cleanCallback) {
+        const btn = document.getElementById(btnId);
+        const toast = document.getElementById(toastId);
+        btn.disabled = true; toast.className = "toast-msg"; toast.innerText = "Synchronizing data layers...";
+        
+        fetch(SERVICE_URL, { method: 'POST', body: JSON.stringify(payload) })
+        .then(res => res.json())
+        .then(resData => {
+            if (resData.result === "success") {
+                toast.className = "toast-msg text-success";
+                toast.innerText = "Success! Action synchronized.";
+                cleanCallback();
+                initSyncLoad();
+            } else {
+                toast.className = "toast-msg text-error";
+                toast.innerText = resData.error || "Execution failed.";
+            }
+        })
+        .catch(() => {
+            toast.className = "toast-msg text-error";
+            toast.innerText = "Error transmitting data.";
+        })
+        .finally(() => btn.disabled = false);
+    }
+
+    function toggleAccordion(id) {
+        const panel = document.getElementById(`accordion-${id}`);
+        const trigger = panel.previousElementSibling;
+        if(panel.classList.contains('open')) {
+            panel.classList.remove('open');
+            trigger.innerHTML = `📁 View Logs (${panel.dataset.count})`;
+        } else {
+            panel.classList.add('open');
+            trigger.innerHTML = `📂 Collapse Logs`;
+        }
+    }
+
+    function buildReportingViews() {
+        const tbody = document.getElementById('analyticsTableBody');
+        tbody.innerHTML = "";
+        
+        const search = document.getElementById('searchFilter').value.toLowerCase();
+        const start = document.getElementById('filterStart').value;
+        const end = document.getElementById('filterEnd').value;
+
+        let globalWorked = 0, globalSite = 0, globalLops = 0;
+        let matchedEmployees = cacheStore.employees.filter(emp => 
+            emp.name.toLowerCase().includes(search) || 
+            emp.department.toLowerCase().includes(search) ||
+            emp.id.toLowerCase().includes(search)
+        );
+
+        document.getElementById('statTotalStaff').innerText = cacheStore.employees.length;
+
+        matchedEmployees.forEach((emp, uniqueIndex) => {
+            let filteredLogs = cacheStore.logs.filter(l => l.empId === emp.id);
+            
+            if(search) {
+                if(!emp.name.toLowerCase().includes(search) && !emp.department.toLowerCase().includes(search) && !emp.id.toLowerCase().includes(search)) {
+                    filteredLogs = filteredLogs.filter(l => l.description.toLowerCase().includes(search));
+                }
+            }
+            
+            if(start) filteredLogs = filteredLogs.filter(l => l.date >= start);
+            if(end) filteredLogs = filteredLogs.filter(l => l.date <= end);
+
+            let pWeight = 0, sWeight = 0, hWeight = 0, lWeight = 0;
+
+            filteredLogs.forEach(l => {
+                if (l.status === "Present (Full Day)") pWeight += 1.0;
+                else if (l.status === "Site work") sWeight += 1.0;
+                else if (l.status === "Holiday") hWeight += 1.0;
+                else if (l.status === "Leave Without Pay (LOP)") lWeight += 1.0;
+                else if (l.status.startsWith("AM:")) {
+                    if (l.status.includes("AM: Present")) pWeight += 0.5;
+                    if (l.status.includes("AM: Site work")) sWeight += 0.5;
+                    if (l.status.includes("AM: Leave Without Pay")) lWeight += 0.5;
+                    
+                    if (l.status.includes("PM: Present")) pWeight += 0.5;
+                    if (l.status.includes("PM: Site work")) sWeight += 0.5;
+                    if (l.status.includes("PM: Leave Without Pay")) lWeight += 0.5;
+                }
+            });
+
+            globalWorked += pWeight;
+            globalSite += sWeight;
+            globalLops += lWeight;
+
+            // Updated Layout Strings: Added inline button mapping rules triggering Note Modification options
+            let logDetailsHtml = filteredLogs.map(l => {
+                let badgeClass = "bg-pres";
+                if(l.status === "Site work" || l.status.includes("Site work")) badgeClass = "bg-site";
+                if(l.status.includes("LOP") || l.status.includes("Leave Without Pay")) badgeClass = "bg-lop";
+                if(l.status === "Holiday") badgeClass = "bg-holiday";
+                if(l.status.startsWith("AM:") && (l.status.includes("LOP") && (l.status.includes("Present") || l.status.includes("Site")))) badgeClass = "bg-mix";
+                
+                let descSpan = l.description ? `<span class="desc-text">📝 ${l.description}</span>` : "";
+                return `
+                    <div class="log-item-row">
+                        <div style="text-align:left;">
+                            <span class="badge ${badgeClass}">${l.date}: ${l.status}</span>
+                            ${descSpan}
+                        </div>
+                        <div class="log-item-actions">
+                            <button type="button" class="btn-inline-edit" onclick="inlineEditLogDescription('${l.date}', '${emp.id}', '${escape(l.description)}')">Edit Note</button>
+                            <button type="button" class="btn-inline-delete" onclick="deleteAttendanceLog('${l.date}', '${emp.id}')">Delete</button>
+                        </div>
+                    </div>
+                `;
+            }).join("");
+
+            let accordionHtml = filteredLogs.length ? `
+                <div class="accordion-trigger" onclick="toggleAccordion(${uniqueIndex})">📁 View Logs (${filteredLogs.length})</div>
+                <div id="accordion-${uniqueIndex}" class="accordion-content" data-count="${filteredLogs.length}">${logDetailsHtml}</div>
+            ` : '<span style="color:#aaa; display:block; margin-top:4px; font-size:12px;">No history logged</span>';
+
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td data-label="ID"><code>${emp.id}</code></td>
+                <td data-label="Resource Name">
+                    <strong>${emp.name}</strong>
+                    ${accordionHtml}
+                </td>
+                <td data-label="Dept"><small>${emp.department}</small></td>
+                <td data-label="Present (Office)"><span class="badge bg-pres">${pWeight} Days</span></td>
+                <td data-label="Site Work"><span class="badge bg-site">${sWeight} Days</span></td>
+                <td data-label="Holiday"><span class="badge bg-holiday">${hWeight} Days</span></td>
+                <td data-label="LOP Days"><span class="badge bg-lop">${lWeight} Days</span></td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('statFullPresent').innerText = globalWorked;
+        document.getElementById('statTotalSite').innerText = globalSite;
+        document.getElementById('statTotalLops').innerText = globalLops;
+        
+        let totalUnits = globalWorked + globalSite + globalLops;
+        document.getElementById('statBillable').innerText = totalUnits > 0 
+            ? Math.round(((globalWorked + globalSite) / totalUnits) * 100) + "%" : "0%";
+    }
+
+    function downloadExcelReport() {
+        const table = document.getElementById("attendanceReportingTable");
+        let rows = table.querySelectorAll("tbody tr");
+        
+        let exportData = [[
+            "Employee ID", "Employee Name", "Department", 
+            "Present (Office) Days", "Site Work Days", "Holidays", "LOP Leaves"
+        ]];
+        
+        rows.forEach(row => {
+            let cells = row.querySelectorAll("td");
+            if (cells.length >= 7) {
+                let empId = cells[0].innerText.trim();
+                let nameElement = cells[1].querySelector("strong");
+                let empName = nameElement ? nameElement.innerText.trim() : cells[1].innerText.trim();
+                let dept = cells[2].innerText.trim();
+                let present = parseFloat(cells[3].innerText) || 0;
+                let site = parseFloat(cells[4].innerText) || 0;
+                let holiday = parseFloat(cells[5].innerText) || 0;
+                let lop = parseFloat(cells[6].innerText) || 0;
+                
+                exportData.push([empId, empName, dept, present, site, holiday, lop]);
+            }
+        });
+
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.aoa_to_sheet(exportData);
+        
+        const maxLens = exportData[0].map((_, colIdx) => Math.max(...exportData.map(row => String(row[colIdx] || '').length)));
+        worksheet['!cols'] = maxLens.map(len => ({ wch: len + 3 }));
+
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance Metrics");
+        
+        const timestamp = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(workbook, `Peppero_Attendance_Report_${timestamp}.xlsx`);
+    }
+
+    checkActiveAuthSession();
+</script>
+</body>
+</html>
