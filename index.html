@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Peppero Attendance Portal</title>
+    <!-- Link Manifest Configurations to turn page into PWA -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -40,7 +46,6 @@
 
         .header-title { text-align: center; margin-top: 0; margin-bottom: 24px; color: #1e293b; font-size: 1.5rem; }
         
-        /* Data Completeness Home Banner Alert Box Styling */
         .alert-banner {
             background-color: var(--warning-bg); border: 1px solid var(--warning-border);
             color: var(--warning-text); padding: 12px 16px; border-radius: 8px;
@@ -190,7 +195,6 @@
 <div class="container">
     <h2 class="header-title">Peppero Attendance System</h2>
     
-    <!-- Dynamic Alert Banner Component Block -->
     <div id="missingDataAlert" class="alert-banner"></div>
 
     <div class="top-navbar">
@@ -200,6 +204,8 @@
             <div class="tab" data-panel="report-panel">Analytics & Reports</div>
         </div>
         <div class="nav-actions">
+            <!-- Native Native PWA Home Screen Installation Button Handler -->
+            <button type="button" class="btn-secondary" id="btnPWAInstall" style="display:none; background:#4f46e5; color:#fff;">📲 Install App</button>
             <button type="button" class="btn-secondary" id="btnGlobalRefresh" onclick="initSyncLoad()">🔄 Refresh</button>
             <button type="button" class="btn-danger" onclick="logOutSession()">Logout</button>
         </div>
@@ -263,7 +269,7 @@
         <div id="attToast" class="toast-msg"></div>
     </div>
 
-    <!-- PANEL 2: MANAGE EMPLOYEES & SYSTEM BASELINE CONFIGURATIONS -->
+    <!-- PANEL 2: MANAGE EMPLOYEES -->
     <div id="employee-panel" class="panel">
         <div class="filter-bar" style="background:#fff7ed; border-color:#ffedd5; margin-bottom:24px;">
             <div class="form-group">
@@ -362,50 +368,57 @@
 </div>
 
 <script>
-
-// ==========================================
-// PEPPERO REMOTE VERSION CONTROL SERVICE
-// ==========================================
-const CURRENT_VERSION = "beta002";
-
-// Replace this with the link where your latest index.html or version manifest is hosted
-const UPDATE_MANIFEST_URL = "https://anilkrishnaraj.github.io/attendance-tracker/version.json"; 
-
-function checkForApplicationUpdates() {
-    // Add a random timestamp to prevent the browser from caching the version check file
-    const url = UPDATE_MANIFEST_URL + "?nocache=" + new Date().getTime();
-
-    fetch(url)
-    .then(res => res.json())
-    .then(manifest => {
-        if (manifest.latestVersion !== CURRENT_VERSION) {
-            // Trigger a modal popup or direct reload notice
-            const processUpdate = confirm(
-                `A critical system upgrade (${manifest.latestVersion}) is available for Peppero Attendance Portal.\n\n` +
-                `Release Notes: ${manifest.releaseNotes}\n\n` +
-                `Click 'OK' to instantly sync and upgrade.`
-            );
-            
-            if (processUpdate) {
-                // Clear browser internal assets cache and force-reload fresh code from servers
-                window.location.reload(true);
-            }
-        }
-    })
-    .catch(err => console.log("Update check skipped: Device offline or manifest unreached.", err));
-}
-
-// Check on boot startup sequence
-setTimeout(checkForApplicationUpdates, 3000);
-
-// Check silently every 30 minutes while the window tab remains open
-setInterval(checkForApplicationUpdates, 1000 * 60 * 30);
-
     const SERVICE_URL = "https://script.google.com/macros/s/AKfycbzDEFhMWITYuQgW8y_-VP5p7IdgSsn3cfnW7y9tZgVQ6KlHsiZlNb2AYmHvxfYZTPnjdQ/exec";
     const PORTAL_SECRET = "Admin123";
     
     let cacheStore = { employees: [], logs: [] };
     let currentActivePanel = "attendance-panel";
+    let deferredPrompt = null;
+
+    // ===================================================
+    // NATIVE PWA SERVICE WORKER REGISTRATION SYSTEM
+    // ===================================================
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+            .then(reg => {
+                console.log('ServiceWorker engine active.', reg.scope);
+                
+                // Monitor for server updates dynamically
+                reg.onupdatefound = () => {
+                    const installingWorker = reg.installing;
+                    installingWorker.onstatechange = () => {
+                        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            if (confirm("New Peppero system patches are ready. Reload to upgrade immediately?")) {
+                                window.location.reload();
+                            }
+                        }
+                    };
+                };
+            })
+            .catch(err => console.error('PWA registration fault:', err));
+        });
+    }
+
+    // Capture explicit "Add to Home Screen" prompt triggers
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        const installBtn = document.getElementById('btnPWAInstall');
+        if(installBtn) installBtn.style.display = 'inline-block';
+    });
+
+    document.getElementById('btnPWAInstall').addEventListener('click', () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    document.getElementById('btnPWAInstall').style.display = 'none';
+                }
+                deferredPrompt = null;
+            });
+        }
+    });
 
     function setDefaultMonthFilters() {
         const today = new Date();
@@ -424,7 +437,6 @@ setInterval(checkForApplicationUpdates, 1000 * 60 * 30);
         document.getElementById('filterEnd').value = offsetFormat(lastDay);
         document.getElementById('attDate').valueAsDate = today;
 
-        // Load Baseline Date parameter configuration from LocalStorage if set
         const storedBaseline = localStorage.getItem("peppero_baseline_start_date");
         if(storedBaseline) {
             document.getElementById('systemBaselineDate').value = storedBaseline;
@@ -435,11 +447,10 @@ setInterval(checkForApplicationUpdates, 1000 * 60 * 30);
         const dateVal = document.getElementById('systemBaselineDate').value;
         if(dateVal) {
             localStorage.setItem("peppero_baseline_start_date", dateVal);
-            evaluateAttendanceCompleteness(); // Trigger evaluation calculation updates instantly
+            evaluateAttendanceCompleteness();
         }
     }
 
-    /* DATA-ENTRY VALIDATION ALERT ENGINE */
     function evaluateAttendanceCompleteness() {
         const alertBanner = document.getElementById('missingDataAlert');
         const baselineStr = localStorage.getItem("peppero_baseline_start_date");
@@ -466,7 +477,6 @@ setInterval(checkForApplicationUpdates, 1000 * 60 * 30);
 
         let alerts = [];
 
-        // Evaluate Yesterday's logs if it falls after the user-defined baseline
         if (yesterday >= baselineDate) {
             const yesterdayStr = formatLocalString(yesterday);
             const loggedCount = cacheStore.logs.filter(l => l.date === yesterdayStr).length;
@@ -475,7 +485,6 @@ setInterval(checkForApplicationUpdates, 1000 * 60 * 30);
             }
         }
 
-        // Evaluate Today's logs if it falls after the user-defined baseline
         if (today >= baselineDate) {
             const todayStr = formatLocalString(today);
             const loggedCount = cacheStore.logs.filter(l => l.date === todayStr).length;
@@ -550,7 +559,7 @@ setInterval(checkForApplicationUpdates, 1000 * 60 * 30);
             cacheStore = data;
             renderAttendanceOptions();
             renderRosterList();
-            evaluateAttendanceCompleteness(); // Trigger evaluation calculation check routines
+            evaluateAttendanceCompleteness();
             if(currentActivePanel === 'report-panel') buildReportingViews();
             checkForExistingLog();
         })
@@ -703,10 +712,9 @@ setInterval(checkForApplicationUpdates, 1000 * 60 * 30);
         }, () => { resetEmpForm(); });
     });
 
-    // INLINE DESCRIPTION NOTE UPDATER TRANSACTION ENGINE
     function inlineEditLogDescription(date, empId, currentDesc) {
-        const newDesc = prompt(`Modify note details for Entry: [${date} | ID: ${empId}]:`, currentDesc);
-        if(newDesc === null) return; // Action aborted if user cancelled prompt
+        const newDesc = prompt(`Modify note details for Entry: [${date} | ID: ${empId}]:`, unescape(currentDesc));
+        if(newDesc === null) return;
 
         const record = cacheStore.logs.find(l => l.date === date && l.empId === empId);
         if(!record) return;
@@ -717,7 +725,7 @@ setInterval(checkForApplicationUpdates, 1000 * 60 * 30);
         fetch(SERVICE_URL, {
             method: 'POST',
             body: JSON.stringify({
-                action: "logAttendance", // Reuses logAttendance function inside apps script to safely handle row overrides
+                action: "logAttendance",
                 date: date,
                 empId: empId,
                 status: record.status,
@@ -845,7 +853,6 @@ setInterval(checkForApplicationUpdates, 1000 * 60 * 30);
             globalSite += sWeight;
             globalLops += lWeight;
 
-            // Updated Layout Strings: Added inline button mapping rules triggering Note Modification options
             let logDetailsHtml = filteredLogs.map(l => {
                 let badgeClass = "bg-pres";
                 if(l.status === "Site work" || l.status.includes("Site work")) badgeClass = "bg-site";
